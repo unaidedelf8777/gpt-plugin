@@ -1,9 +1,16 @@
-import os
 from typing import Optional
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, Depends, Body, UploadFile
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, File, Form, HTTPException, Body, UploadFile
 from fastapi.staticfiles import StaticFiles
+from adds.upload import DocumentURLs, pdf_to_text_and_upsert 
+import os
+
+
+os.environ["DATASTORE"] = 'pinecone'
+os.environ["OPENAI_API_KEY"] = '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'
+os.environ["PINECONE_API_KEY"] = '79013a0b-f1cc-4e5f-aa52-24cafa01622d'
+os.environ["PINECONE_ENVIRONMENT"] = 'us-central1-gcp'
+os.environ["PINECONE_INDEX"] = 'pdfs'
 
 from models.api import (
     DeleteRequest,
@@ -18,30 +25,29 @@ from services.file import get_document_from_file
 
 from models.models import DocumentMetadata, Source
 
-bearer_scheme = HTTPBearer()
-BEARER_TOKEN = os.environ.get("BEARER_TOKEN")
-assert BEARER_TOKEN is not None
 
-
-def validate_token(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    if credentials.scheme != "Bearer" or credentials.credentials != BEARER_TOKEN:
-        raise HTTPException(status_code=401, detail="Invalid or missing token")
-    return credentials
-
-
-app = FastAPI(dependencies=[Depends(validate_token)])
+app = FastAPI()
 app.mount("/.well-known", StaticFiles(directory=".well-known"), name="static")
 
-# Create a sub-application, in order to access just the query endpoint in an OpenAPI schema, found at http://0.0.0.0:8000/sub/openapi.json when the app is running locally
+# Create a sub-application, in order to accessd at http://0pp is running locally
 sub_app = FastAPI(
     title="Retrieval Plugin API",
     description="A retrieval API for querying and filtering documents based on natural language queries and metadata",
     version="1.0.0",
-    servers=[{"url": "https://your-app-url.com"}],
-    dependencies=[Depends(validate_token)],
+    servers=[{"url": "https://unaidedelf8777-redesigned-space-sniffle-xj5795xq4xvcpq96-8000.preview.app.github.dev"}],
 )
 app.mount("/sub", sub_app)
 
+
+@app.post("/upsert-pdf-url")
+async def upload_from_pdf_url(document: DocumentURLs):
+    for url in document.documents:
+        try:
+            await pdf_to_text_and_upsert(url, datastore)
+        except Exception as e:
+            print('Failed to process PDF:', e)
+            return {"message": "Internal error or error with PDF site"}
+    return {"message": "Processing complete and successful"}
 
 @app.post(
     "/upsert-file",
@@ -105,8 +111,7 @@ async def query_main(
 @sub_app.post(
     "/query",
     response_model=QueryResponse,
-    # NOTE: We are describing the shape of the API endpoint input due to a current limitation in parsing arrays of objects from OpenAPI schemas. This will not be necessary in the future.
-    description="Accepts search query objects array each with query and optional filter. Break down complex questions into sub-questions. Refine results by criteria, e.g. time / source, don't do this often. Split queries if ResponseTooLargeError occurs.",
+    description="Accepts search query objects with query and optional filter. Break down complex questions into sub-questions. Refine results by criteria, e.g. time / source, don't do this often. Split queries if ResponseTooLargeError occurs.",
 )
 async def query(
     request: QueryRequest = Body(...),

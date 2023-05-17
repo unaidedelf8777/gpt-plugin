@@ -3,9 +3,70 @@ info:
   title: Retrieval Plugin API
   description: A retrieval API for querying and filtering documents based on natural language queries and metadata
   version: 1.0.0
-  servers:
-    - url: https://your-app-url.com
+servers:
+  - url: https://unaidedelf8777-redesigned-space-sniffle-xj5795xq4xvcpq96-8000.preview.app.github.dev
 paths:
+  /upsert-pdf-url:
+    post:
+      operationId: uploadPdfUrl
+      summary: Upload PDF URLs for processing
+      description: |
+        This endpoint accepts a list of PDF URLs in a JSON format. For each URL, it downloads the PDF, extracts the text, removes markdown and HTML, and then upserts the text to a vector database. This is useful for processing and storing text data from multiple PDFs in a single operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                documents:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                  description: List of PDF URLs to be processed
+                  example: ["http://example.com/sample1.pdf", "http://example.com/sample2.pdf"]
+            example:
+              documents: ["http://example.com/sample1.pdf", "http://example.com/sample2.pdf"]
+      responses:
+        '200':
+          description: Processing completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Processing completed
+        '400':
+          description: Invalid input, make sure the request body contains a valid list of PDF URLs
+  /upsert:
+    post:
+      summary: Upsert
+      description: Save chat information. Accepts an array of documents with text (potential questions + conversation text), metadata (source 'chat' and timestamp, no ID as this will be generated). Confirm with the user before saving, ask for more details/context.
+      operationId: upsert_upsert_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertRequest"
+        required: true
+      responses:
+        "200":
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertResponse"
+        "422":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HTTPValidationError"
+      security:
+        - HTTPBearer: []
   /query:
     post:
       summary: Query
@@ -31,9 +92,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/HTTPValidationError"
       security:
-        - HTTPBearer: []
+        - 
 components:
   schemas:
+    Document:
+      title: Document
+      required:
+        - text
+      type: object
+      properties:
+        id:
+          title: Id
+          type: string
+        text:
+          title: Text
+          type: string
+        metadata:
+          $ref: "#/components/schemas/DocumentMetadata"
     DocumentChunkMetadata:
       title: DocumentChunkMetadata
       type: object
@@ -79,6 +154,24 @@ components:
         score:
           title: Score
           type: number
+    DocumentMetadata:
+      title: DocumentMetadata
+      type: object
+      properties:
+        source:
+          $ref: "#/components/schemas/Source"
+        source_id:
+          title: Source Id
+          type: string
+        url:
+          title: Url
+          type: string
+        created_at:
+          title: Created At
+          type: string
+        author:
+          title: Author
+          type: string
     DocumentMetadataFilter:
       title: DocumentMetadataFilter
       type: object
@@ -169,6 +262,28 @@ components:
         - chat
       type: string
       description: An enumeration.
+    UpsertRequest:
+      title: UpsertRequest
+      required:
+        - documents
+      type: object
+      properties:
+        documents:
+          title: Documents
+          type: array
+          items:
+            $ref: "#/components/schemas/Document"
+    UpsertResponse:
+      title: UpsertResponse
+      required:
+        - ids
+      type: object
+      properties:
+        ids:
+          title: Ids
+          type: array
+          items:
+            type: string
     ValidationError:
       title: ValidationError
       required:
@@ -191,6 +306,4 @@ components:
           title: Error Type
           type: string
   securitySchemes:
-    HTTPBearer:
-      type: http
-      scheme: bearer
+    none

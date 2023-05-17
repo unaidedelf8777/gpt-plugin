@@ -4,42 +4,56 @@ import os
 
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 
+from typing import List
+from InstructorEmbedding import INSTRUCTOR
+import os
+from extract_metadata import extract_metadata_from_document
 
-@retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(3))
-def get_embeddings(texts: List[str]) -> List[List[float]]:
+from tenacity import retry, wait_random_exponential, stop_after_attempt
+
+
+from typing import List
+import os
+from InstructorEmbedding import INSTRUCTOR
+from extract_metadata import extract_metadata_from_document
+
+def get_embeddings(text: str) -> List[float]:
     """
-    Embed texts using OpenAI's ada model.
+    Embed texts using Instructor Embedding model.
 
     Args:
-        texts: The list of texts to embed.
+        text: The text to embed.
 
     Returns:
-        A list of embeddings, each of which is a list of floats.
+        An embedding, which is a list of floats.
 
     Raises:
-        Exception: If the OpenAI API call fails.
+        Exception: If the InstructorEmbedding API call fails.
     """
-    # Call the OpenAI API to get the embeddings
-    # NOTE: Azure Open AI requires deployment id
-    deployment = os.environ.get("OPENAI_EMBEDDINGMODEL_DEPLOYMENTID")
+    # Extract metadata from the text
+    metadata = extract_metadata_from_document(text)
 
-    response = {}
-    if deployment == None:
-        response = openai.Embedding.create(input=texts, model="text-embedding-ada-002")
-    else:
-        response = openai.Embedding.create(input=texts, deployment_id=deployment)
-    
-    # Extract the embedding data from the response
-    data = response["data"]  # type: ignore
+    # Prepare the instruction based on the metadata
+    instruction = f"Represent the {metadata['domains'][0]} {metadata['text_type']} for {metadata['task_objective']}"
 
-    # Return the embeddings as a list of lists of floats
-    return [result["embedding"] for result in data]
+    # Prepare the text with instruction
+    text_with_instruction = [instruction, text]
+
+    # Load the InstructorEmbedding model
+    model = INSTRUCTOR('hkunlp/instructor-large')
+
+    # Call the InstructorEmbedding API to get the embedding
+    embedding = model.encode([text_with_instruction])
+
+    # Return the embedding as a list of floats
+    return embedding[0].tolist()
+
 
 
 @retry(wait=wait_random_exponential(min=1, max=20), stop=stop_after_attempt(3))
 def get_chat_completion(
     messages,
-    model="gpt-3.5-turbo",  # use "gpt-4" for better results
+    model="gpt-4",  # use "gpt-4" for better results
     deployment_id = None
 ):
     """
